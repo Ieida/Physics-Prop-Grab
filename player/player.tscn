@@ -1,0 +1,149 @@
+[gd_scene load_steps=6 format=3 uid="uid://cnra30qlnk3e8"]
+
+[ext_resource type="Script" path="res://player/player.gd" id="1_445rx"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_e4exb"]
+height = 1.5
+
+[sub_resource type="SeparationRayShape3D" id="SeparationRayShape3D_43nn3"]
+
+[sub_resource type="GDScript" id="GDScript_go1cc"]
+resource_name = "camera"
+script/source = "extends Camera3D
+
+@export var sensitivity: float = 0.1
+var x: float
+var y: float
+
+func _input(event):
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if event is InputEventMouseMotion:
+			look_x(-event.relative.y * sensitivity)
+			look_y(-event.relative.x * sensitivity)
+
+func _process(delta):
+	basis = Basis()
+	rotate_x(deg_to_rad(x))
+	rotate_y(deg_to_rad(y))
+
+func look_x(degrees: float):
+	x += degrees
+	if x > 90: x = 90
+	elif x < -90: x = -90
+
+func look_y(degrees: float):
+	y = wrapf(y + degrees, 0, 360)
+"
+
+[sub_resource type="GDScript" id="GDScript_fpjsv"]
+resource_name = "grabber"
+script/source = "extends Node3D
+
+@onready var hud: Label = Player.HUD.get_node(\"Grab\")
+@onready var raycast: RayCast3D = get_node(\"RayCast3D\")
+@onready var point: Node3D = get_node(\"Point\")
+var prop: RigidBody3D
+var looking_at_prop: RigidBody3D
+@export var pull_force: float = 50
+
+func _ready():
+	hud.hide()
+
+func _physics_process(_delta):
+	if not prop:
+		look_for_prop()
+	else:
+		drag_prop(_delta)
+
+func _process(_delta):
+	if Input.is_action_just_pressed(\"grab\"):
+		if prop:
+			drop_prop()
+		elif looking_at_prop:
+			prop = looking_at_prop
+			looking_at_prop = null
+			hide_hud()
+	
+	# Spawn cubes
+	if Input.is_action_just_pressed(\"spawn_cube\"):
+		spawn_cube()
+
+func drag_prop(delta: float):
+	var p1 = prop.global_position
+	var p2 = point.global_position
+	var m = prop.mass
+	var pf = pull_force
+	var dv = p2-p1
+	var f = dv * m * pf
+	prop.apply_central_force(f)
+
+func drop_prop():
+	prop = null
+
+func hide_hud():
+	hud.hide()
+
+func look_for_prop():
+	raycast.force_raycast_update()
+	if raycast.is_colliding():
+		var p = raycast.get_collider()
+		if p is RigidBody3D:
+			looking_at_prop = p
+			show_hud()
+	elif looking_at_prop:
+		looking_at_prop = null
+		hide_hud()
+
+func show_hud():
+	hud.show()
+
+func spawn_cube():
+	var c = preload(\"res://cube/cube.tscn\").instantiate()
+	get_tree().root.add_child(c)
+	c.global_position = point.global_position
+	c.global_rotation = point.global_rotation
+	var mi = c.get_node(\"MeshInstance3D\") as MeshInstance3D
+	mi.mesh = mi.mesh.duplicate()
+	var m = mi.mesh.surface_get_material(0).duplicate() as StandardMaterial3D
+	mi.mesh.surface_set_material(0, m)
+	match randi_range(0, 5):
+		0:
+			m.albedo_texture = preload(\"res://addons/kenney_prototype_textures/red/texture_06.png\")
+		1:
+			m.albedo_texture = preload(\"res://addons/kenney_prototype_textures/green/texture_06.png\")
+		2:
+			m.albedo_texture = preload(\"res://addons/kenney_prototype_textures/orange/texture_06.png\")
+		3:
+			m.albedo_texture = preload(\"res://addons/kenney_prototype_textures/purple/texture_06.png\")
+		4:
+			m.albedo_texture = preload(\"res://addons/kenney_prototype_textures/light/texture_04.png\")
+		5:
+			m.albedo_texture = preload(\"res://addons/kenney_prototype_textures/dark/texture_05.png\")
+"
+
+[node name="Player" type="CharacterBody3D" node_paths=PackedStringArray("camera")]
+script = ExtResource("1_445rx")
+camera = NodePath("Camera3D")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+shape = SubResource("CapsuleShape3D_e4exb")
+
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
+shape = SubResource("SeparationRayShape3D_43nn3")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+script = SubResource("GDScript_go1cc")
+
+[node name="Grabber" type="Node3D" parent="Camera3D"]
+script = SubResource("GDScript_fpjsv")
+
+[node name="RayCast3D" type="RayCast3D" parent="Camera3D/Grabber"]
+enabled = false
+target_position = Vector3(0, 0, -1.5)
+hit_back_faces = false
+
+[node name="Point" type="Node3D" parent="Camera3D/Grabber"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.5)
