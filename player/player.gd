@@ -49,18 +49,22 @@ func _physics_process(delta):
 		var nv = velocity.move_toward(Vector3.ZERO, 10.0 * delta)
 		nv.y = velocity.y
 		velocity = nv
+	
 	move_and_slide()
 
-func _process(delta):
+func _process(_delta):
 	if Input.is_action_just_pressed("ui_cancel"):
 		toggle_mouse_mode()
 
-func add_velocity(amount: Vector3, max: float):
+func add_grab_mass(amt: float):
+	$Camera3D/Grabber.max_grab_mass += amt
+
+func add_velocity(amount: Vector3, max_vel: float):
 	var dot = amount.normalized().dot(velocity.normalized())
 	dot = clampf(dot, 0, 1)
 	var vel_in_dir = velocity * dot
 	var spd_in_dir = vel_in_dir.length()
-	var remaining_velocity = clampf(max - spd_in_dir, 0, max)
+	var remaining_velocity = clampf(max_vel - spd_in_dir, 0, max_vel)
 	var vel = clampf(amount.length(), 0, remaining_velocity)
 	velocity += amount.normalized() * vel
 

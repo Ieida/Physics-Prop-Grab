@@ -1,6 +1,7 @@
-[gd_scene load_steps=6 format=3 uid="uid://cnra30qlnk3e8"]
+[gd_scene load_steps=9 format=3 uid="uid://cnra30qlnk3e8"]
 
 [ext_resource type="Script" path="res://player/player.gd" id="1_445rx"]
+[ext_resource type="Texture2D" uid="uid://dcahux46654a8" path="res://addons/kenney_prototype_textures/dark/texture_01.png" id="2_g3jc0"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_e4exb"]
 height = 1.5
@@ -21,7 +22,7 @@ func _input(event):
 			look_x(-event.relative.y * sensitivity)
 			look_y(-event.relative.x * sensitivity)
 
-func _process(delta):
+func _process(_delta):
 	basis = Basis()
 	rotate_x(deg_to_rad(x))
 	rotate_y(deg_to_rad(y))
@@ -45,6 +46,7 @@ script/source = "extends Node3D
 var prop: RigidBody3D
 var looking_at_prop: RigidBody3D
 @export var pull_force: float = 50
+@export var max_grab_mass: float = 1
 
 func _ready():
 	hud.hide()
@@ -59,7 +61,7 @@ func _process(_delta):
 	if Input.is_action_just_pressed(\"grab\"):
 		if prop:
 			drop_prop()
-		elif looking_at_prop:
+		elif looking_at_prop and looking_at_prop.mass <= max_grab_mass:
 			prop = looking_at_prop
 			looking_at_prop = null
 			hide_hud()
@@ -68,7 +70,7 @@ func _process(_delta):
 	if Input.is_action_just_pressed(\"spawn_cube\"):
 		spawn_cube()
 
-func drag_prop(delta: float):
+func drag_prop(_delta: float):
 	var p1 = prop.global_position
 	var p2 = point.global_position
 	var m = prop.mass
@@ -96,6 +98,10 @@ func look_for_prop():
 
 func show_hud():
 	hud.show()
+	if looking_at_prop.mass > max_grab_mass:
+		hud.text = \"Too heavy!\"
+	else:
+		hud.text = \"Press E to grab\"
 
 func spawn_cube():
 	var c = preload(\"res://cube/cube.tscn\").instantiate()
@@ -121,6 +127,46 @@ func spawn_cube():
 			m.albedo_texture = preload(\"res://addons/kenney_prototype_textures/dark/texture_05.png\")
 "
 
+[sub_resource type="GDScript" id="GDScript_2g2pc"]
+resource_name = "miner"
+script/source = "extends RayCast3D
+
+@export var material: Material
+@onready var hud: Label = Player.HUD.get_node(\"Mine\")
+var shape: CSGShape3D
+var point: Vector3
+
+func _ready():
+	hud.hide()
+
+func _physics_process(_delta):
+	force_raycast_update()
+	if is_colliding():
+		var coll = get_collider()
+		if coll is CSGShape3D:
+			shape = coll
+			point = get_collision_point()
+			hud.show()
+	elif shape:
+		shape = null
+		hud.hide()
+
+func _process(_delta):
+	if shape and Input.is_action_pressed(&\"mine\"):
+		var s = CSGSphere3D.new()
+		s.radial_segments = 6
+		s.rings = 4
+		s.radius = 0.5
+		s.material = shape.material
+		s.operation = CSGShape3D.OPERATION_SUBTRACTION
+		shape.add_child(s)
+		s.global_position = point
+"
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ipk4w"]
+albedo_texture = ExtResource("2_g3jc0")
+uv1_triplanar = true
+
 [node name="Player" type="CharacterBody3D" node_paths=PackedStringArray("camera")]
 script = ExtResource("1_445rx")
 camera = NodePath("Camera3D")
@@ -139,6 +185,7 @@ script = SubResource("GDScript_go1cc")
 
 [node name="Grabber" type="Node3D" parent="Camera3D"]
 script = SubResource("GDScript_fpjsv")
+pull_force = 25.0
 
 [node name="RayCast3D" type="RayCast3D" parent="Camera3D/Grabber"]
 enabled = false
@@ -147,3 +194,10 @@ hit_back_faces = false
 
 [node name="Point" type="Node3D" parent="Camera3D/Grabber"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.5)
+
+[node name="Miner" type="RayCast3D" parent="Camera3D"]
+enabled = false
+target_position = Vector3(0, 0, -1.5)
+hit_back_faces = false
+script = SubResource("GDScript_2g2pc")
+material = SubResource("StandardMaterial3D_ipk4w")
